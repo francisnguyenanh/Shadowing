@@ -1,0 +1,5 @@
+flask
+click
+yt-dlp
+ffmpeg-python
+youtube-transcript-api

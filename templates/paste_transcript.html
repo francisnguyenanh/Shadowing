@@ -1,0 +1,430 @@
+{% extends 'base.html' %}
+{% block title %}Paste Transcript — {{ video.title or video.video_id }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-xl font-bold text-gray-100">
+    📥 Thêm transcript —
+    <span class="text-indigo-400">{{ video.title or video.youtube_url }}</span>
+  </h1>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- ══════════════════════════════════════════════════════
+       LEFT: Prompt Panel
+  ══════════════════════════════════════════════════════ -->
+  <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 flex flex-col gap-4">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-bold text-gray-100">📋 Prompts cho AI</h2>
+      <div class="flex items-center gap-2">
+        {% if transcript_count and transcript_count > 0 %}
+        <span class="text-xs bg-green-900 text-green-300 border border-green-700 px-2 py-0.5 rounded-full">
+          ✅ {{ transcript_count }} dòng transcript
+        </span>
+        <a href="{{ url_for('api_download_transcript_json', video_db_id=video.id) }}"
+           class="text-xs bg-indigo-800 hover:bg-indigo-700 border border-indigo-600 text-indigo-200 px-2 py-0.5 rounded-full transition"
+           download title="Tải JSON transcript để đính kèm vào AI">
+          ⬇️ Tải JSON
+        </a>
+        {% else %}
+        <span class="text-xs bg-gray-800 text-gray-500 border border-gray-700 px-2 py-0.5 rounded-full">
+          — Chưa có transcript
+        </span>
+        {% endif %}
+        {% if chunks|length > 1 %}
+        <span class="text-xs bg-indigo-900 text-indigo-300 border border-indigo-700 px-2 py-0.5 rounded-full">
+          {{ chunks|length }} phần · ~4 phút/phần
+        </span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if transcript_count and transcript_count > 0 %}
+    <p class="text-xs text-green-400 -mt-2">📝 Transcript đã import. Dùng prompt bên dưới hoặc đính kèm file JSON cho AI để dịch.</p>
+    {% elif chunks|length > 1 %}
+    <p class="text-xs text-gray-400 -mt-2">Copy từng phần → dán vào AI riêng → paste JSON kết quả ở bên phải. App tự gộp &amp; sắp xếp.</p>
+    {% else %}
+    <p class="text-xs text-gray-400 -mt-2">Copy → dán vào Gemini / Grok / DeepSeek.</p>
+    {% endif %}
+
+    <!-- Chunk list (compact rows, prompt hidden for clipboard) -->
+    <div class="flex flex-col gap-1.5 overflow-y-auto" style="max-height:240px;">
+      {% for chunk in chunks %}
+      <div class="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-750 rounded-lg border border-gray-700">
+        {% if chunks|length == 1 %}
+        <span class="text-sm font-semibold text-gray-200 flex-1">Toàn bộ video</span>
+        {% else %}
+        <div class="flex-1 min-w-0">
+          <span class="text-sm font-semibold text-indigo-300">Phần {{ chunk.part }}/{{ chunk.total_parts }}</span>
+          <span class="text-xs text-gray-400 ml-1.5">{{ chunk.from_str }}–{{ chunk.to_str }}</span>
+          {% if chunk.has_transcript %}
+          <span class="text-xs text-green-500 ml-1">✓transcript</span>
+          {% endif %}
+        </div>
+        {% endif %}
+        <!-- Hidden textarea keeps prompt text accessible for clipboard -->
+        <textarea id="chunk-ta-{{ loop.index0 }}" class="hidden" readonly>{{ chunk.prompt }}</textarea>
+        <button class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1 rounded-lg transition flex-none"
+                onclick="copyChunk({{ loop.index0 }}, this)">
+          📋 Copy
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- AI links -->
+    <div class="grid grid-cols-3 gap-2">
+      <a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer"
+         class="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs py-2 rounded-lg transition">
+        🔵 Gemini
+      </a>
+      <a href="https://grok.com" target="_blank" rel="noopener noreferrer"
+         class="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs py-2 rounded-lg transition">
+        ⚡ Grok
+      </a>
+      <a href="https://chat.deepseek.com" target="_blank" rel="noopener noreferrer"
+         class="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs py-2 rounded-lg transition">
+        🐋 DeepSeek
+      </a>
+    </div>
+
+    <!-- Continuation Prompt (dùng khi AI bị ngắt giữa chừng một đoạn) -->
+    <div class="border-t border-gray-700 pt-4">
+      <button onclick="toggleContinuation()" id="toggle-cont-btn"
+              class="text-sm font-semibold text-yellow-400 hover:text-yellow-300 flex items-center gap-2 transition w-full text-left">
+        <span id="cont-arrow">▶</span> 🔄 Tạo Prompt Tiếp Theo (nếu AI bị ngắt giữa chừng)
+      </button>
+
+      <div id="continuation-section" class="hidden mt-3 space-y-3">
+        <p class="text-xs text-gray-400">Nhập thông tin từ JSON cuối AI đã trả về:</p>
+        <div class="flex gap-2">
+          <div class="flex-1">
+            <label class="text-xs text-gray-400 mb-1 block">ID segment cuối</label>
+            <input type="number" id="last-id" min="1" value=""
+                   placeholder="VD: 42"
+                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
+                          focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500" />
+          </div>
+          <div class="flex-1">
+            <label class="text-xs text-gray-400 mb-1 block">Thời gian kết thúc (giây)</label>
+            <input type="number" id="last-end" min="0" step="0.1"
+                   placeholder="VD: 125.5"
+                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
+                          focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500" />
+          </div>
+        </div>
+        <button onclick="generateContinuation()"
+                class="w-full bg-yellow-700 hover:bg-yellow-600 text-white font-semibold py-2 rounded-lg text-sm transition">
+          ⚡ Tạo Prompt Tiếp Theo
+        </button>
+        <div id="continuation-prompt-wrap" class="hidden">
+          <textarea id="continuation-textarea" readonly
+                    class="w-full bg-gray-800 border border-yellow-700 rounded-lg p-3 text-xs text-gray-300 font-mono resize-none"
+                    style="height: 200px;"></textarea>
+          <button onclick="copyPrompt('continuation-textarea', 'copy-btn-cont')"
+                  id="copy-btn-cont"
+                  class="mt-2 w-full bg-yellow-700 hover:bg-yellow-600 text-white font-semibold py-2 rounded-lg transition text-sm">
+            📋 Copy Prompt Tiếp Theo
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload SRT / Prompt dịch JSON -->
+    <div class="border-t border-gray-700 pt-4 space-y-3">
+
+      <!-- Upload SRT mới -->
+      <div>
+        <button onclick="toggleSrtUpload()" id="toggle-srt-btn"
+                class="text-sm font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-2 transition w-full text-left">
+          <span id="srt-arrow">▶</span> 📄 Upload / Cập nhật file .srt
+        </button>
+        <div id="srt-upload-section" class="hidden mt-3">
+          <form method="POST" action="{{ url_for('api_upload_srt', video_db_id=video.id) }}"
+                enctype="multipart/form-data" class="flex items-center gap-2">
+            <input type="file" name="srt_file" accept=".srt" required
+                   class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-xs
+                          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
+                          file:bg-indigo-800 file:text-indigo-200 file:text-xs file:cursor-pointer" />
+            <button type="submit"
+                    class="flex-none bg-blue-700 hover:bg-blue-600 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+              📥 Import
+            </button>
+          </form>
+          <p class="text-xs text-gray-500 mt-1">Upload file .srt mới sẽ thay thế transcript hiện tại.</p>
+        </div>
+      </div>
+
+      {% if srt_translation_prompt %}
+      <!-- Prompt dịch file JSON -->
+      <div>
+        <button onclick="toggleSrtPrompt()" id="toggle-srt-prompt-btn"
+                class="text-sm font-semibold text-teal-400 hover:text-teal-300 flex items-center gap-2 transition w-full text-left">
+          <span id="srt-prompt-arrow">▶</span> 📎 Prompt dịch (dùng khi đính kèm file JSON cho AI)
+        </button>
+        <div id="srt-prompt-section" class="hidden mt-3 space-y-2">
+          <p class="text-xs text-gray-400">Download file JSON → đính kèm vào Gemini/ChatGPT → dán prompt này:</p>
+          <div class="flex gap-2">
+            <a href="{{ url_for('api_download_transcript_json', video_db_id=video.id) }}"
+               download
+               class="flex-1 flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-300 text-xs py-2 rounded-lg transition">
+              ⬇️ Tải JSON transcript
+            </a>
+          </div>
+          <textarea id="srt-prompt-ta" readonly
+                    class="w-full bg-gray-800 border border-teal-700 rounded-lg p-3 text-xs text-gray-300 font-mono resize-none"
+                    style="height:140px;">{{ srt_translation_prompt }}</textarea>
+          <button onclick="copySrtPrompt()" id="copy-srt-prompt-btn"
+                  class="w-full bg-teal-700 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg transition text-sm">
+            📋 Copy Prompt Dịch
+          </button>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       RIGHT: Paste JSON (multi-part)
+  ══════════════════════════════════════════════════════ -->
+  <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 flex flex-col">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="text-lg font-bold text-gray-100">📥 Paste kết quả JSON</h2>
+      <span id="parts-count" class="text-xs text-indigo-400 font-semibold">1 phần</span>
+    </div>
+    <p class="text-xs text-gray-400 mb-3">Paste nhiều phần JSON nếu AI trả về nhiều đoạn. App sẽ tự gộp &amp; sắp xếp.</p>
+    {% if chunks|length > 1 %}
+    <button type="button" onclick="autoAddParts({{ chunks|length }})"
+            class="mb-3 text-xs bg-gray-800 hover:bg-gray-700 border border-indigo-700 text-indigo-300 px-3 py-1.5 rounded-lg transition">
+      ⚡ Tự thêm {{ chunks|length }} ô JSON (1 ô cho mỗi phần)
+    </button>
+    {% endif %}
+
+    {% if error %}
+    <div class="mb-4 bg-red-900 border border-red-700 text-red-300 text-sm px-4 py-3 rounded-lg">
+      <span class="font-semibold">✗ Lỗi:</span> {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('save_transcript_route', video_db_id=video.id) }}"
+          id="transcript-form" class="flex flex-col flex-1 gap-3">
+
+      <!-- Dynamic JSON parts list -->
+      <div id="json-parts-list" class="flex flex-col gap-3">
+
+        {% set prev = previous_inputs if previous_inputs is defined and previous_inputs else [] %}
+
+        <div class="json-part" data-part="1">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-semibold text-gray-400">📄 Phần 1</span>
+          </div>
+          <textarea name="transcript_json"
+                    placeholder='Dán JSON từ AI (Phần 1) vào đây...'
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-300 font-mono resize-none
+                           focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+                    style="height: 180px;"
+          >{% if prev | length > 0 %}{{ prev[0] }}{% endif %}</textarea>
+        </div>
+
+        {% if prev | length > 1 %}
+          {% for i in range(1, prev | length) %}
+          <div class="json-part" data-part="{{ i + 1 }}">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold text-indigo-400">📄 Phần {{ i + 1 }}</span>
+              <button type="button" onclick="removePart(this)"
+                      class="text-xs text-red-400 hover:text-red-300 transition">✕ Xóa</button>
+            </div>
+            <textarea name="transcript_json"
+                      placeholder="Dán JSON Phần {{ i + 1 }} vào đây..."
+                      class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-300 font-mono resize-none
+                             focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+                      style="height: 180px;"
+            >{{ prev[i] }}</textarea>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+
+      <!-- Add part button -->
+      <button type="button" onclick="addJsonPart()"
+              class="w-full border-2 border-dashed border-gray-700 hover:border-indigo-500 text-gray-500 hover:text-indigo-400
+                     text-sm font-semibold py-3 rounded-xl transition">
+        ＋ Thêm phần JSON tiếp theo
+      </button>
+
+      <!-- Submit -->
+      <button type="submit"
+              class="w-full bg-green-700 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition text-sm">
+        💾 Lưu Transcript (gộp tất cả phần)
+      </button>
+    </form>
+
+    <!-- Sample JSON -->
+    <div class="mt-4">
+      <button onclick="toggleSample()" class="text-xs text-indigo-400 hover:text-indigo-300 underline transition">
+        👁 Xem ví dụ JSON mẫu
+      </button>
+      <div id="sample-json" class="hidden mt-3 bg-gray-800 rounded-lg p-3 text-xs text-gray-400 font-mono overflow-auto max-h-48">
+<pre>{
+  "title": "NHK やさしいにほんご",
+  "language": "ja",
+  "duration": 120,
+  "segments": [
+    {
+      "id": 1,
+      "start": 0.0,
+      "end": 3.5,
+      "text": "おはようございます。",
+      "translation": "Chào buổi sáng."
+    }
+  ]
+}</pre>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const VIDEO_DB_ID = {{ video.id }};
+
+// ── Chunk list copy ──
+function copyChunk(idx, btn) {
+  const ta = document.getElementById(`chunk-ta-${idx}`);
+  const origText = btn.textContent;
+  navigator.clipboard.writeText(ta.value).then(() => {
+    btn.textContent = '✓ Đã copy!';
+    btn.style.background = '#15803d';
+    setTimeout(() => { btn.textContent = origText; btn.style.background = ''; }, 2000);
+  }).catch(() => { ta.select(); document.execCommand('copy'); });
+}
+
+// ── Auto-add JSON part slots ──
+function autoAddParts(n) {
+  const current = document.querySelectorAll('#json-parts-list .json-part').length;
+  for (let i = current; i < n; i++) addJsonPart();
+}
+
+// ── Copy helper ──
+function copyPrompt(taId, btnId) {
+  const ta = document.getElementById(taId);
+  const btn = document.getElementById(btnId);
+  const origText = btn.textContent;
+  navigator.clipboard.writeText(ta.value).then(() => {
+    btn.textContent = '✓ Đã copy!';
+    btn.style.background = '#15803d';
+    setTimeout(() => { btn.textContent = origText; btn.style.background = ''; }, 2000);
+  }).catch(() => { ta.select(); document.execCommand('copy'); });
+}
+
+// ── Sample JSON ──
+function toggleSample() {
+  document.getElementById('sample-json').classList.toggle('hidden');
+}
+
+// ── Continuation prompt ──
+function toggleContinuation() {
+  const sec = document.getElementById('continuation-section');
+  const arrow = document.getElementById('cont-arrow');
+  sec.classList.toggle('hidden');
+  arrow.textContent = sec.classList.contains('hidden') ? '▶' : '▼';
+}
+
+function toggleSrtUpload() {
+  const sec = document.getElementById('srt-upload-section');
+  const arrow = document.getElementById('srt-arrow');
+  sec.classList.toggle('hidden');
+  arrow.textContent = sec.classList.contains('hidden') ? '▶' : '▼';
+}
+
+function toggleSrtPrompt() {
+  const sec = document.getElementById('srt-prompt-section');
+  const arrow = document.getElementById('srt-prompt-arrow');
+  sec.classList.toggle('hidden');
+  arrow.textContent = sec.classList.contains('hidden') ? '▶' : '▼';
+}
+
+function copySrtPrompt() {
+  const ta = document.getElementById('srt-prompt-ta');
+  const btn = document.getElementById('copy-srt-prompt-btn');
+  const origText = btn.textContent;
+  navigator.clipboard.writeText(ta.value).then(() => {
+    btn.textContent = '✓ Đã copy!';
+    btn.style.background = '#0f766e';
+    setTimeout(() => { btn.textContent = origText; btn.style.background = ''; }, 2000);
+  }).catch(() => { ta.select(); document.execCommand('copy'); });
+}
+
+async function generateContinuation() {
+  const lastId = parseInt(document.getElementById('last-id').value);
+  const lastEnd = parseFloat(document.getElementById('last-end').value);
+  if (!lastId || lastId <= 0 || isNaN(lastEnd) || lastEnd <= 0) {
+    alert('Vui lòng nhập ID segment cuối và thời gian kết thúc hợp lệ (> 0).');
+    return;
+  }
+  try {
+    const res = await fetch(`/api/continuation_prompt/${VIDEO_DB_ID}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ last_id: lastId, last_end: lastEnd })
+    });
+    const data = await res.json();
+    if (data.error) { alert('Lỗi: ' + data.error); return; }
+    document.getElementById('continuation-textarea').value = data.prompt;
+    document.getElementById('continuation-prompt-wrap').classList.remove('hidden');
+  } catch (e) {
+    alert('Lỗi kết nối: ' + e.message);
+  }
+}
+
+// ── Multi-JSON parts ──
+function updatePartsCount() {
+  const count = document.querySelectorAll('#json-parts-list .json-part').length;
+  document.getElementById('parts-count').textContent = count + ' phần';
+}
+
+function addJsonPart() {
+  const list = document.getElementById('json-parts-list');
+  const partNum = list.querySelectorAll('.json-part').length + 1;
+  const div = document.createElement('div');
+  div.className = 'json-part';
+  div.dataset.part = partNum;
+  div.innerHTML = `
+    <div class="flex items-center justify-between mb-1">
+      <span class="text-xs font-semibold text-indigo-400">📄 Phần ${partNum}</span>
+      <button type="button" onclick="removePart(this)"
+              class="text-xs text-red-400 hover:text-red-300 transition">✕ Xóa</button>
+    </div>
+    <textarea name="transcript_json"
+              placeholder="Dán JSON Phần ${partNum} vào đây..."
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-300 font-mono resize-none
+                     focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+              style="height: 180px;"></textarea>`;
+  list.appendChild(div);
+  updatePartsCount();
+  div.querySelector('textarea').focus();
+  div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function removePart(btn) {
+  const parts = document.querySelectorAll('#json-parts-list .json-part');
+  if (parts.length <= 1) { alert('Phải có ít nhất 1 phần JSON.'); return; }
+  btn.closest('.json-part').remove();
+  document.querySelectorAll('#json-parts-list .json-part').forEach((p, i) => {
+    p.dataset.part = i + 1;
+    const lbl = p.querySelector('span');
+    if (lbl) lbl.textContent = `📄 Phần ${i + 1}`;
+    const ta = p.querySelector('textarea');
+    if (ta && !ta.value) ta.placeholder = `Dán JSON Phần ${i + 1} vào đây...`;
+  });
+  updatePartsCount();
+}
+
+updatePartsCount();
+</script>
+{% endblock %}

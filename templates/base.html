@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Shadowing App{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {} }
+    }
+  </script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-full flex flex-col">
+
+  <!-- Navbar -->
+  <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="{{ url_for('index') }}" class="text-xl font-bold text-indigo-400 hover:text-indigo-300 transition">
+        🎌 Shadowing App
+      </a>
+      <a href="{{ url_for('add_video_form') }}"
+         class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+        ＋ Thêm video
+      </a>
+    </div>
+  </nav>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="max-w-7xl mx-auto w-full px-4 pt-4 space-y-2">
+        {% for category, message in messages %}
+          <div class="px-4 py-3 rounded-lg text-sm font-medium
+            {% if category == 'success' %}bg-green-900 border border-green-700 text-green-300
+            {% else %}bg-red-900 border border-red-700 text-red-300{% endif %}">
+            {% if category == 'success' %}✓{% else %}✗{% endif %} {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Main content -->
+  <main class="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 border-t border-gray-800 text-center text-xs text-gray-400 py-3">
+    Shadowing App — Luyện nghe & nói ngoại ngữ
+  </footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block title %}Thêm Video — Shadowing App{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <h1 class="text-2xl font-bold text-gray-100 mb-6">➕ Thêm video mới</h1>
+
+  <!-- Form -->
+  <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 mb-8">
+    <form method="POST" action="{{ url_for('add_video') }}" enctype="multipart/form-data">
+      <div class="mb-5">
+        <label for="youtube_url" class="block text-sm font-semibold text-gray-300 mb-2">
+          🔗 URL YouTube
+        </label>
+        <input
+          type="url"
+          id="youtube_url"
+          name="youtube_url"
+          required
+          placeholder="https://www.youtube.com/watch?v=..."
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500
+                 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-sm"
+          oninput="updateSubtitleLink(this.value)"
+        />
+        <div class="flex items-center justify-between mt-1">
+          <p class="text-xs text-gray-400">Hỗ trợ: youtube.com/watch, youtu.be, /shorts, /embed</p>
+          <a id="subtitle-link" href="#" target="_blank" rel="noopener noreferrer"
+             class="hidden text-xs bg-blue-900 hover:bg-blue-800 border border-blue-700 text-blue-300 px-2 py-1 rounded-lg transition">
+            📥 Download .srt (subtitle.to)
+          </a>
+        </div>
+      </div>
+
+      <div class="mb-5">
+        <label for="language" class="block text-sm font-semibold text-gray-300 mb-2">
+          🌐 Ngôn ngữ
+        </label>
+        <select
+          id="language"
+          name="language"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-gray-100
+                 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-sm">
+          <option value="ja">🇯🇵 Tiếng Nhật</option>
+          <option value="en">🇬🇧 Tiếng Anh</option>
+        </select>
+      </div>
+
+      <div class="mb-6">
+        <label for="srt_file" class="block text-sm font-semibold text-gray-300 mb-2">
+          📄 File transcript .srt <span class="text-gray-500 font-normal">(tùy chọn)</span>
+        </label>
+        <input
+          type="file"
+          id="srt_file"
+          name="srt_file"
+          accept=".srt"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-gray-300
+                 focus:outline-none focus:border-indigo-500 transition text-sm
+                 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0
+                 file:bg-indigo-800 file:text-indigo-200 file:text-xs file:cursor-pointer"
+        />
+        <p class="text-xs text-gray-400 mt-1">
+          Download file .srt từ YouTube → Upload vào đây để app tự tạo prompt dịch cho AI
+        </p>
+      </div>
+
+      <button type="submit"
+              class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition text-sm">
+        ➕ Thêm video
+      </button>
+    </form>
+  </div>
+
+  <!-- Workflow steps -->
+  <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
+    <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Quy trình</h2>
+    <div class="space-y-4">
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 bg-indigo-900 border border-indigo-700 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
+          📄
+        </div>
+        <div>
+          <p class="font-semibold text-gray-200 text-sm">Bước 1 — Download file .srt từ YouTube</p>
+          <p class="text-gray-400 text-xs mt-0.5">Mở video YouTube → Cài đặt → Phụ đề → chọn ngôn ngữ → Download .srt (hoặc dùng DownSub.com)</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 bg-purple-900 border border-purple-700 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
+          🔗
+        </div>
+        <div>
+          <p class="font-semibold text-gray-200 text-sm">Bước 2 — Dán link YouTube + upload file .srt</p>
+          <p class="text-gray-400 text-xs mt-0.5">Nhập URL và chọn file .srt vừa download ở form trên</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 bg-yellow-900 border border-yellow-700 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
+          🤖
+        </div>
+        <div>
+          <p class="font-semibold text-gray-200 text-sm">Bước 3 — Gửi cho AI dịch</p>
+          <p class="text-gray-400 text-xs mt-0.5">Download JSON transcript → đính kèm vào Gemini/ChatGPT + copy prompt dịch</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 bg-green-900 border border-green-700 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
+          📋
+        </div>
+        <div>
+          <p class="font-semibold text-gray-200 text-sm">Bước 4 — Paste JSON đã dịch vào app</p>
+          <p class="text-gray-400 text-xs mt-0.5">Dán JSON từ AI vào app để bắt đầu luyện tập shadowing</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateSubtitleLink(url) {
+  const link = document.getElementById('subtitle-link');
+  const trimmed = url.trim();
+  if (trimmed.includes('youtube.com') || trimmed.includes('youtu.be')) {
+    link.href = 'https://subtitle.to/' + encodeURI(trimmed);
+    link.classList.remove('hidden');
+  } else {
+    link.classList.add('hidden');
+  }
+}
+</script>
+{% endblock %}
