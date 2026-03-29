@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}
+  {% if video %}★ Bookmarks — {{ video.title }}{% else %}★ Tất cả Bookmarks{% endif %} — Shadowing App
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+
+  <!-- Header -->
+  <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <h1 class="text-xl font-bold text-gray-100">
+        {% if video %}
+          ★ Bookmarks — {{ video.title }}
+        {% else %}
+          ★ Tất cả Bookmarks
+        {% endif %}
+      </h1>
+      <p class="text-sm text-gray-400 mt-1">
+        {{ total }} câu đã đánh dấu
+        {% if video %}
+          · <a href="{{ url_for('bookmarks_all') }}" class="text-indigo-400 hover:text-indigo-300 underline">Xem tất cả video</a>
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex gap-2">
+      {% if not video %}
+      <a href="{{ url_for('index') }}"
+         class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-semibold px-4 py-2 rounded-lg transition">
+        ← Danh sách video
+      </a>
+      {% else %}
+      <a href="{{ url_for('player', video_db_id=video.id) }}"
+         class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+        ▶ Luyện tập
+      </a>
+      <a href="{{ url_for('bookmarks_all') }}"
+         class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-semibold px-4 py-2 rounded-lg transition">
+        ★ Tất cả bookmarks
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if grouped %}
+    {% for vid, group in grouped.items() %}
+    <div class="mb-8">
+      <!-- Video title header -->
+      <div class="flex items-center gap-3 mb-3 pb-2 border-b border-gray-800">
+        <img src="https://img.youtube.com/vi/{{ group.yt_video_id }}/default.jpg"
+             class="w-16 h-12 object-cover rounded" alt="" />
+        <div class="flex-1 min-w-0">
+          <a href="{{ url_for('player', video_db_id=vid) }}"
+             class="text-sm font-semibold text-indigo-400 hover:text-indigo-300 transition truncate block">
+            {{ group.video_title }}
+          </a>
+          <span class="text-xs text-gray-500">{{ group.segments|length }} bookmarks</span>
+          {% if group.language == 'ja' %}
+            <span class="text-xs bg-red-900 text-red-300 border border-red-700 px-1.5 py-0.5 rounded-full ml-2">🇯🇵</span>
+          {% else %}
+            <span class="text-xs bg-blue-900 text-blue-300 border border-blue-700 px-1.5 py-0.5 rounded-full ml-2">🇬🇧</span>
+          {% endif %}
+        </div>
+        <a href="{{ url_for('bookmarks_video', video_db_id=vid) }}"
+           class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition flex-none"
+           title="Chỉ xem bookmarks video này">
+          Lọc
+        </a>
+      </div>
+
+      <!-- Bookmarked segments -->
+      <div class="space-y-2">
+        {% for seg in group.segments %}
+        <div class="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 hover:border-indigo-700 transition group">
+          <div class="flex items-start gap-3">
+            <!-- Timestamp + play link -->
+            <a href="{{ url_for('player', video_db_id=vid) }}#seg-{{ seg.id }}"
+               class="text-xs font-mono text-gray-500 hover:text-indigo-400 transition flex-none mt-0.5 min-w-[40px]"
+               title="Mở player tại segment này">
+              {{ '%02d:%02d' | format((seg.start_time // 60)|int, (seg.start_time % 60)|int) }}
+            </a>
+            <div class="flex-1 min-w-0">
+              <p class="text-white font-medium leading-relaxed">{{ seg.text }}</p>
+              {% if seg.translation %}
+              <p class="text-sm text-emerald-400 italic mt-1">{{ seg.translation }}</p>
+              {% endif %}
+            </div>
+            <span class="text-yellow-400 text-sm flex-none">★</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+  {% else %}
+    <div class="flex flex-col items-center justify-center py-24 text-center">
+      <div class="text-6xl mb-4">☆</div>
+      <h2 class="text-xl font-semibold text-gray-300 mb-2">Chưa có bookmark nào</h2>
+      <p class="text-gray-400 mb-6">Nhấn ☆ bên cạnh segment trong player để đánh dấu câu cần ôn lại.</p>
+      <a href="{{ url_for('index') }}"
+         class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-xl transition">
+        ← Quay lại luyện tập
+      </a>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

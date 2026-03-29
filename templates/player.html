@@ -28,6 +28,9 @@
     <a href="{{ url_for('index') }}" class="text-gray-400 hover:text-gray-200 transition text-sm">← Quay lại</a>
     <span class="text-gray-700">|</span>
     <h1 class="text-sm font-semibold text-gray-200 truncate flex-1">{{ video.title or video.youtube_url }}</h1>
+    <a href="{{ url_for('bookmarks_video', video_db_id=video.id) }}"
+       class="text-yellow-400 hover:text-yellow-300 text-xs px-2 py-1 rounded transition border border-transparent hover:border-yellow-700 flex-shrink-0"
+       title="Xem bookmarks video này">★ Bookmarks</a>
     {% if video.language == 'ja' %}
       <span class="text-xs bg-red-900 text-red-300 border border-red-700 px-2 py-0.5 rounded-full flex-shrink-0">🇯🇵 日本語</span>
     {% else %}
@@ -103,11 +106,17 @@
         </div>
 
         <!-- Shadowing mode -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-400">
             <input type="checkbox" id="shadowing-mode" onchange="toggleShadowingMode()"
                    class="w-3.5 h-3.5 rounded accent-indigo-500" />
             🎭 Shadowing mode (ẩn text, hiện sau 1.5s)
+          </label>
+          <span class="text-gray-700">|</span>
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-400">
+            <input type="checkbox" id="dictation-mode" onchange="toggleDictationMode()"
+                   class="w-3.5 h-3.5 rounded accent-orange-500" />
+            ✍️ Dictation mode (nghe → gõ → chấm điểm)
           </label>
         </div>
 
@@ -166,6 +175,49 @@
         <button onclick="openReader()"
                 class="text-xs bg-purple-900 hover:bg-purple-800 border border-purple-700 text-purple-300 px-2 py-1.5 rounded-lg transition"
                 title="Đọc toàn transcript">📖</button>
+      </div>
+
+      <!-- Dictation panel (hidden by default) -->
+      <div id="dictation-panel" class="hidden flex-shrink-0 bg-gray-900 border-b border-gray-800 px-3 py-3">
+        <div class="space-y-2">
+          <!-- Current segment info -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono text-gray-500" id="dictation-seg-time">--:--</span>
+            <span class="text-xs text-orange-400 font-semibold">✍️ Nghe và gõ lại câu bạn nghe được</span>
+            <button onclick="replayDictationSegment()"
+                    class="ml-auto text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-2 py-1 rounded transition"
+                    title="Nghe lại (phím R)">🔄 Nghe lại</button>
+          </div>
+          <!-- Input area -->
+          <textarea id="dictation-input" rows="2" placeholder="Gõ câu bạn nghe được vào đây…"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100
+                           placeholder-gray-500 focus:outline-none focus:border-orange-500 resize-none"
+                    onkeydown="handleDictationKey(event)"></textarea>
+          <!-- Action buttons -->
+          <div class="flex items-center gap-2">
+            <button onclick="checkDictation()"
+                    class="bg-orange-700 hover:bg-orange-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition">
+              ✓ Kiểm tra (Enter)
+            </button>
+            <button onclick="showDictationAnswer()"
+                    class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs px-3 py-2 rounded-lg transition">
+              👁 Xem đáp án
+            </button>
+            <button onclick="nextDictationSegment()"
+                    class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs px-3 py-2 rounded-lg transition">
+              Câu tiếp →
+            </button>
+            <!-- Score display -->
+            <div id="dictation-score" class="ml-auto text-sm font-bold hidden"></div>
+          </div>
+          <!-- Result comparison -->
+          <div id="dictation-result" class="hidden rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 space-y-1">
+            <p class="text-xs text-gray-400">So sánh:</p>
+            <p id="dictation-diff" class="text-sm leading-relaxed"></p>
+            <p id="dictation-original" class="text-sm text-emerald-400 italic"></p>
+            <p id="dictation-translation" class="text-xs text-gray-400 italic"></p>
+          </div>
+        </div>
       </div>
 
       <!-- Segments list -->

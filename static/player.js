@@ -911,4 +911,226 @@ async function saveSegmentContent(el, field, segEl) {
   document.addEventListener('touchend', () => { dragging = false; });
 })();
 
+// ── Dictation Mode ────────────────────────────────────────────────────────────
+
+let dictationMode = false;
+let dictationSegIndex = -1;  // current segment index for dictation
+let dictationChecked = false;
+
+function toggleDictationMode() {
+  const checkbox = document.getElementById('dictation-mode');
+  dictationMode = checkbox.checked;
+  const panel = document.getElementById('dictation-panel');
+  const lyricsPanel = document.getElementById('lyrics-panel');
+
+  if (dictationMode) {
+    panel.classList.remove('hidden');
+    // Hide text in lyrics so user can't peek
+    lyricsPanel.classList.add('dictation-active');
+    // Auto-pause after each segment
+    if (!autoPauseEnabled) toggleAutoPause();
+    // Start from current active segment or first
+    dictationSegIndex = activeIndex >= 0 ? activeIndex : 0;
+    loadDictationSegment();
+  } else {
+    panel.classList.add('hidden');
+    lyricsPanel.classList.remove('dictation-active');
+    clearDictationResult();
+  }
+}
+
+function loadDictationSegment() {
+  if (dictationSegIndex < 0 || dictationSegIndex >= SEGMENTS.length) return;
+  const seg = SEGMENTS[dictationSegIndex];
+  const m = Math.floor(seg.start_time / 60);
+  const s = Math.floor(seg.start_time % 60);
+  const timeEl = document.getElementById('dictation-seg-time');
+  if (timeEl) timeEl.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+
+  // Clear previous
+  const input = document.getElementById('dictation-input');
+  if (input) { input.value = ''; input.focus(); }
+  clearDictationResult();
+  dictationChecked = false;
+
+  // Seek and play the segment
+  if (player) {
+    player.seekTo(seg.start_time + timeOffset, true);
+    player.playVideo();
+  }
+}
+
+function clearDictationResult() {
+  const result = document.getElementById('dictation-result');
+  const score = document.getElementById('dictation-score');
+  if (result) result.classList.add('hidden');
+  if (score) score.classList.add('hidden');
+}
+
+function replayDictationSegment() {
+  if (dictationSegIndex < 0 || dictationSegIndex >= SEGMENTS.length) return;
+  const seg = SEGMENTS[dictationSegIndex];
+  if (player) {
+    player.seekTo(seg.start_time + timeOffset, true);
+    player.playVideo();
+  }
+}
+
+function checkDictation() {
+  if (dictationSegIndex < 0 || dictationSegIndex >= SEGMENTS.length) return;
+  const seg = SEGMENTS[dictationSegIndex];
+  const input = document.getElementById('dictation-input');
+  const userText = (input ? input.value : '').trim();
+  if (!userText) return;
+
+  const originalText = (seg.text || '').trim();
+  const result = compareDictation(userText, originalText);
+
+  // Show score
+  const scoreEl = document.getElementById('dictation-score');
+  if (scoreEl) {
+    scoreEl.classList.remove('hidden');
+    const pct = result.accuracy;
+    if (pct >= 90) {
+      scoreEl.textContent = `🎉 ${pct}% — Tuyệt vời!`;
+      scoreEl.className = 'ml-auto text-sm font-bold text-green-400';
+    } else if (pct >= 70) {
+      scoreEl.textContent = `👍 ${pct}% — Khá tốt!`;
+      scoreEl.className = 'ml-auto text-sm font-bold text-yellow-400';
+    } else if (pct >= 50) {
+      scoreEl.textContent = `📝 ${pct}% — Cần luyện thêm`;
+      scoreEl.className = 'ml-auto text-sm font-bold text-orange-400';
+    } else {
+      scoreEl.textContent = `💪 ${pct}% — Cố gắng hơn!`;
+      scoreEl.className = 'ml-auto text-sm font-bold text-red-400';
+    }
+  }
+
+  // Show diff
+  const resultEl = document.getElementById('dictation-result');
+  const diffEl = document.getElementById('dictation-diff');
+  const origEl = document.getElementById('dictation-original');
+  const transEl = document.getElementById('dictation-translation');
+  if (resultEl) resultEl.classList.remove('hidden');
+  if (diffEl) diffEl.innerHTML = result.diffHtml;
+  if (origEl) origEl.textContent = '✓ Đáp án: ' + originalText;
+  if (transEl) transEl.textContent = seg.translation ? '🌐 ' + seg.translation : '';
+
+  dictationChecked = true;
+}
+
+function showDictationAnswer() {
+  if (dictationSegIndex < 0 || dictationSegIndex >= SEGMENTS.length) return;
+  const seg = SEGMENTS[dictationSegIndex];
+  const resultEl = document.getElementById('dictation-result');
+  const diffEl = document.getElementById('dictation-diff');
+  const origEl = document.getElementById('dictation-original');
+  const transEl = document.getElementById('dictation-translation');
+  const scoreEl = document.getElementById('dictation-score');
+
+  if (resultEl) resultEl.classList.remove('hidden');
+  if (diffEl) diffEl.innerHTML = '<span class="text-gray-500 italic">Bạn đã xem đáp án</span>';
+  if (origEl) origEl.textContent = '✓ Đáp án: ' + (seg.text || '');
+  if (transEl) transEl.textContent = seg.translation ? '🌐 ' + seg.translation : '';
+  if (scoreEl) { scoreEl.textContent = '👁 Xem đáp án'; scoreEl.className = 'ml-auto text-sm font-bold text-gray-400'; scoreEl.classList.remove('hidden'); }
+  dictationChecked = true;
+}
+
+function nextDictationSegment() {
+  // Mark current segment as done (reveal text)
+  if (dictationSegIndex >= 0 && dictationSegIndex < SEGMENTS.length) {
+    const curEl = document.querySelector(`.segment-item[data-index="${dictationSegIndex}"]`);
+    if (curEl) curEl.classList.add('dictation-done');
+  }
+  dictationSegIndex++;
+  if (dictationSegIndex >= SEGMENTS.length) {
+    dictationSegIndex = SEGMENTS.length - 1;
+    alert('Đã hết segments! Bạn đã luyện xong toàn bộ.');
+    return;
+  }
+  loadDictationSegment();
+}
+
+function handleDictationKey(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    if (dictationChecked) {
+      nextDictationSegment();
+    } else {
+      checkDictation();
+    }
+  }
+}
+
+/**
+ * Compare user input vs original text. Returns {accuracy: 0-100, diffHtml: string}.
+ * Uses word-level comparison (works for both Japanese and English).
+ */
+function compareDictation(userText, originalText) {
+  // Normalize: lowercase, trim extra spaces
+  const normalize = (s) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const userNorm = normalize(userText);
+  const origNorm = normalize(originalText);
+
+  if (userNorm === origNorm) {
+    return { accuracy: 100, diffHtml: '<span class="text-green-400">' + _escHtml(userText) + '</span>' };
+  }
+
+  // Tokenize: split into characters for CJK, words for latin
+  const tokenize = (s) => {
+    // If mostly CJK, split per character
+    const cjkCount = (s.match(/[\u3000-\u9fff\uff00-\uffef]/g) || []).length;
+    if (cjkCount > s.length * 0.3) {
+      return s.replace(/\s+/g, '').split('');
+    }
+    return s.split(/\s+/);
+  };
+
+  const userTokens = tokenize(userNorm);
+  const origTokens = tokenize(origNorm);
+
+  // LCS (Longest Common Subsequence) for accuracy
+  const m = userTokens.length;
+  const n = origTokens.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (userTokens[i - 1] === origTokens[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  const lcsLen = dp[m][n];
+  const accuracy = n > 0 ? Math.round((lcsLen / n) * 100) : 0;
+
+  // Backtrack LCS to build diff
+  const matchSet = new Set();
+  let i = m, j = n;
+  while (i > 0 && j > 0) {
+    if (userTokens[i - 1] === origTokens[j - 1]) {
+      matchSet.add(i - 1);
+      i--; j--;
+    } else if (dp[i - 1][j] > dp[i][j - 1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+
+  // Build colored HTML from user tokens
+  let diffHtml = '';
+  for (let k = 0; k < userTokens.length; k++) {
+    const token = _escHtml(userTokens[k]);
+    if (matchSet.has(k)) {
+      diffHtml += '<span class="text-green-400">' + token + '</span>';
+    } else {
+      diffHtml += '<span class="text-red-400 line-through">' + token + '</span>';
+    }
+  }
+
+  return { accuracy, diffHtml };
+}
+
 

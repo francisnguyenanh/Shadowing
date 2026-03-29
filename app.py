@@ -703,6 +703,77 @@ def api_timeline_offset(video_db_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ── Bookmarks ─────────────────────────────────────────────────────────────────
+
+@app.route('/bookmarks')
+def bookmarks_all():
+    """Show all bookmarked segments across all videos."""
+    try:
+        db = get_db()
+        rows = db.execute(
+            '''SELECT s.id, s.start_time, s.end_time, s.text, s.translation,
+                      s.video_id, v.title as video_title, v.video_id as yt_video_id, v.language
+               FROM segments s
+               JOIN videos v ON v.id = s.video_id
+               WHERE s.bookmarked = 1
+               ORDER BY v.title COLLATE NOCASE, s.start_time'''
+        ).fetchall()
+        bookmarks = [dict(r) for r in rows]
+        # Group by video
+        grouped = {}
+        for b in bookmarks:
+            vid = b['video_id']
+            if vid not in grouped:
+                grouped[vid] = {
+                    'video_id': vid,
+                    'video_title': b['video_title'],
+                    'yt_video_id': b['yt_video_id'],
+                    'language': b['language'],
+                    'segments': []
+                }
+            grouped[vid]['segments'].append(b)
+        return render_template('bookmarks.html', grouped=grouped, video=None,
+                               total=len(bookmarks))
+    except Exception as e:
+        flash(f'Lỗi: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/bookmarks/<int:video_db_id>')
+def bookmarks_video(video_db_id):
+    """Show bookmarked segments for a specific video."""
+    try:
+        db = get_db()
+        video = db.execute('SELECT * FROM videos WHERE id = ?', (video_db_id,)).fetchone()
+        if video is None:
+            flash('Không tìm thấy video.', 'error')
+            return redirect(url_for('index'))
+        rows = db.execute(
+            '''SELECT s.id, s.start_time, s.end_time, s.text, s.translation,
+                      s.video_id, v.title as video_title, v.video_id as yt_video_id, v.language
+               FROM segments s
+               JOIN videos v ON v.id = s.video_id
+               WHERE s.bookmarked = 1 AND s.video_id = ?
+               ORDER BY s.start_time''',
+            (video_db_id,)
+        ).fetchall()
+        bookmarks = [dict(r) for r in rows]
+        grouped = {}
+        if bookmarks:
+            grouped[video_db_id] = {
+                'video_id': video_db_id,
+                'video_title': video['title'],
+                'yt_video_id': video['video_id'],
+                'language': video['language'],
+                'segments': bookmarks
+            }
+        return render_template('bookmarks.html', grouped=grouped, video=video,
+                               total=len(bookmarks))
+    except Exception as e:
+        flash(f'Lỗi: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':

@@ -21,10 +21,16 @@
       <a href="{{ url_for('index') }}" class="text-xl font-bold text-indigo-400 hover:text-indigo-300 transition">
         🎌 Shadowing App
       </a>
-      <a href="{{ url_for('add_video_form') }}"
-         class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-        ＋ Thêm video
-      </a>
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('bookmarks_all') }}"
+           class="text-yellow-400 hover:text-yellow-300 text-sm font-semibold px-3 py-2 rounded-lg transition border border-transparent hover:border-yellow-700">
+          ★ Bookmarks
+        </a>
+        <a href="{{ url_for('add_video_form') }}"
+           class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+          ＋ Thêm video
+        </a>
+      </div>
     </div>
   </nav>
 

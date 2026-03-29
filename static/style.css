@@ -197,3 +197,25 @@
   background: rgba(99, 102, 241, 0.2) !important;
   border-radius: 2px;
 }
+
+/* ── Dictation mode ──────────────────────────────────────────────── */
+
+/* When dictation is active, hide all segment text so user can't peek */
+.dictation-active .segment-text {
+  visibility: hidden;
+}
+
+.dictation-active .segment-translation {
+  display: none;
+}
+
+/* Show text for already-checked segments (user scrolls back) */
+.dictation-active .segment-item.dictation-done .segment-text {
+  visibility: visible;
+  opacity: 0.5;
+}
+
+.dictation-active .segment-item.dictation-done .segment-translation {
+  display: block;
+  opacity: 0.5;
+}
