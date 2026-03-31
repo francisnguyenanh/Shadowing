@@ -239,16 +239,46 @@ def build_srt_translation_prompt(language: str, title: str = '', segment_count: 
     lang_label = 'tiếng Nhật' if language == 'ja' else 'tiếng Anh'
     count_note = f' ({segment_count} segments)' if segment_count else ''
     title_note = f' "{title}"' if title else ''
-    return f"""Tôi đính kèm file JSON chứa transcript {lang_label}{title_note}{count_note}.
+    return f"""Bạn là chuyên gia xử lý transcript  {lang_label} cho mục đích luyện shadowing.
 
-MỤC ĐÍCH: Phân tách câu hoàn chỉnh để người dùng luyện shadowing {lang_label}
-NHIỆM VỤ: 
-1. Hãy phân tách câu nội dung của câu {lang_label} trong các segment sau cho hoàn chỉnh không bị ngắt mạch câu, update lại timeline nếu có điều chỉnh lại câu {lang_label}
-2. Thêm bản dịch tiếng Việt vào trường "translation" của mỗi segment
-3. KHÔNG thêm hay bỏ bớt nội dung câu gốc {lang_label}.
+## DỮ LIỆU ĐẦU VÀO
+File JSON đính kèm chứa transcript {lang_label} {title} với [{segment_count}] segments, mỗi segment có: id, start, end, text, translation.
 
-Yêu cầu:
-- Bản dịch tự nhiên, phù hợp học ngôn ngữ theo phương pháp shadowing
-- Trả về JSON hoàn chỉnh (cùng cấu trúc)
-- Không có markdown code block, đảm bảo JSON hợp lệ (không dấu phẩy thừa, ngoặc đúng)
-- Nếu trong 1 phiên trả lời không đủ chỗ cho tất cả segments, sau khi kết thúc phiên, hãy hỏi tôi có muốn tiếp tục dịch phần còn lại không, và nếu tôi đồng ý, hãy tiếp tục với phần chưa dịch."""
+## NHIỆM VỤ
+
+### Bước 1 – Ghép câu hoàn chỉnh (sentence merging)
+Nhiều segment liên tiếp thường chứa một câu bị cắt vụn do auto-transcribe. Hãy ghép các segment liên tiếp lại thành một câu hoàn chỉnh theo nguyên tắc:
+- Câu kết thúc khi gặp dấu: 。！？ hoặc khoảng dừng ngữ nghĩa rõ ràng.
+- Câu KHÔNG kết thúc ở giữa trạng từ nối (けど、から、て、で、が nối câu...).
+- `start` = start của segment đầu tiên được ghép, `end` = end của segment cuối cùng được ghép.
+- `id` giữ nguyên id của segment đầu tiên trong nhóm ghép.
+- Nếu 1 segment đã là câu hoàn chỉnh, giữ nguyên.
+
+Ví dụ:
+Input:
+{{"id":3,"start":6.4,"end":8.3,"text":"ます。ま、そもそもいきなり話がうまくな"}}
+{{"id":4,"start":8.3,"end":10.6,"text":"るってのはほぼ不可能でして、話がうまく"}}
+{{"id":5,"start":10.6,"end":13.0,"text":"なるためにはですね、日常生活から最初は"}}
+
+Output sau ghép (câu chưa kết thúc nên tiếp tục ghép):
+→ Tiếp tục đến khi gặp dấu câu hoặc ngừng ngữ nghĩa.
+
+### Bước 2 – Thêm bản dịch tiếng Việt
+- Điền vào trường `"translation"` của mỗi segment SAU KHI đã ghép.
+- Dịch sát nghĩa, ngắn gọn, giữ nhịp tương đương câu {lang_label} (phù hợp shadowing).
+- KHÔNG dịch thoáng hoặc diễn giải dài.
+- Giữ nguyên 100% nội dung `text` {lang_label}, không sửa, không bổ sung.
+
+Ví dụ dịch đúng phong cách:
+JP: 話がうまくなるためには、日常生活から練習する必要があります。
+VI: Để nói chuyện giỏi hơn, bạn cần luyện tập từ trong cuộc sống hàng ngày.
+
+## FORMAT ĐẦU RA
+- JSON thuần túy, KHÔNG có markdown (không có ```json).
+- Cùng cấu trúc gốc: {{"title":..., "language":..., "segments":[...]}}.
+- JSON hợp lệ: không dấu phẩy thừa, ngoặc đóng đúng.
+
+## XỬ LÝ BATCH
+Vì có nhiều segments, hãy xử lý theo batch: segments [1–150] trước.
+Sau khi hoàn thành, thông báo: "✅ Hoàn thành batch 1 (segments 1–150). Gửi 'tiếp tục' để nhận batch 2 (151–300)."
+Không tự động tiếp tục sang batch tiếp theo."""
