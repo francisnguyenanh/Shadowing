@@ -776,6 +776,84 @@ def bookmarks_video(video_db_id):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+
+# ── Practice count ────────────────────────────────────────────────────────────
+
+@app.route('/api/segment/<int:segment_id>/practice', methods=['POST'])
+def api_increment_practice(segment_id):
+    """Increment practice_count for a segment."""
+    try:
+        db = get_db()
+        db.execute(
+            'UPDATE segments SET practice_count = COALESCE(practice_count, 0) + 1 WHERE id = ?',
+            (segment_id,)
+        )
+        db.commit()
+        row = db.execute('SELECT practice_count FROM segments WHERE id = ?', (segment_id,)).fetchone()
+        return jsonify({'success': True, 'practice_count': row['practice_count'] if row else 0})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ── Daily goal ────────────────────────────────────────────────────────────────
+
+@app.route('/api/daily_goal', methods=['GET'])
+def api_get_daily_goal():
+    """Get current daily goal and today's practiced seconds."""
+    try:
+        import datetime
+        db = get_db()
+        goal_row = db.execute('SELECT minutes_per_day FROM daily_goal WHERE id = 1').fetchone()
+        goal_minutes = goal_row['minutes_per_day'] if goal_row else 15
+        today = datetime.date.today().isoformat()
+        session_row = db.execute(
+            'SELECT SUM(seconds) as total FROM practice_sessions WHERE date = ?', (today,)
+        ).fetchone()
+        today_seconds = session_row['total'] or 0
+        return jsonify({'goal_minutes': goal_minutes, 'today_seconds': today_seconds})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/daily_goal', methods=['POST'])
+def api_set_daily_goal():
+    """Set daily practice goal in minutes."""
+    try:
+        data = request.get_json(silent=True) or {}
+        minutes = int(data.get('minutes', 15))
+        if minutes < 1 or minutes > 480:
+            return jsonify({'error': 'Mục tiêu phải từ 1–480 phút.'}), 400
+        db = get_db()
+        db.execute('UPDATE daily_goal SET minutes_per_day = ? WHERE id = 1', (minutes,))
+        db.commit()
+        return jsonify({'success': True, 'goal_minutes': minutes})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/daily_goal/log', methods=['POST'])
+def api_log_practice_session():
+    """Log practiced seconds for today."""
+    try:
+        import datetime
+        data = request.get_json(silent=True) or {}
+        seconds = int(data.get('seconds', 0))
+        if seconds <= 0:
+            return jsonify({'success': False}), 400
+        db = get_db()
+        today = datetime.date.today().isoformat()
+        db.execute(
+            'INSERT INTO practice_sessions (date, seconds) VALUES (?, ?)', (today, seconds)
+        )
+        db.commit()
+        session_row = db.execute(
+            'SELECT SUM(seconds) as total FROM practice_sessions WHERE date = ?', (today,)
+        ).fetchone()
+        return jsonify({'success': True, 'today_seconds': session_row['total'] or 0})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     with app.app_context():
         init_db()

@@ -20,9 +20,21 @@ let shadowingRevealTimers = {};
 let timeOffset = 0; // seconds to add to segment timestamps for sync
 let autoScrollEnabled = true;
 let loopSegmentId = null;   // null = off; DB id of segment to loop individually
+let loopRangeActive = false;      // multi-segment range loop running
+let loopRangeSelecting = false;   // waiting for start/end segment selection
+let loopRangeStartIdx = null;     // SEGMENTS[] index
+let loopRangeEndIdx = null;       // SEGMENTS[] index
 let autoPauseEnabled = false;
 let showBookmarkedOnly = false;
 let _lastAutoPausedIndex = -1;
+
+// ── Practice count & daily goal ───────────────────────────────────────────────
+let _loopPlayCount = {};       // {segDbId: number of loop completions this session}
+let _lastLoopedSegId = null;   // track when we reset to avoid double-count
+let _sessionStartTime = null;  // Date when playback began (for time tracking)
+let _sessionActive = false;
+let _goalMinutes = 15;
+let _goalTodaySeconds = 0;
 
 // ── YouTube IFrame API ────────────────────────────────────────────────────────
 
@@ -61,8 +73,20 @@ function onPlayerStateChange(event) {
   if (!btn) return;
   if (event.data === YT.PlayerState.PLAYING) {
     btn.textContent = '⏸ Pause';
+    // Start session timer
+    if (!_sessionActive) {
+      _sessionActive = true;
+      _sessionStartTime = Date.now();
+    }
   } else {
     btn.textContent = '▶ Play';
+    // Flush session time
+    if (_sessionActive) {
+      _sessionActive = false;
+      const elapsed = Math.round((Date.now() - _sessionStartTime) / 1000);
+      if (elapsed >= 5) _logPracticeSession(elapsed);
+      _sessionStartTime = null;
+    }
   }
 }
 
@@ -140,10 +164,29 @@ function onPoll() {
     }
   }
 
+  // ── Loop range (multi-segment) ────────────────────────────────────────────
+  if (loopRangeActive && loopRangeStartIdx !== null && loopRangeEndIdx !== null) {
+    const endSeg = SEGMENTS[loopRangeEndIdx];
+    const startSeg = SEGMENTS[loopRangeStartIdx];
+    if (endSeg && startSeg && adjustedTime >= endSeg.end_time) {
+      player.seekTo(startSeg.start_time + timeOffset, true);
+      player.playVideo();
+      return;
+    }
+  }
+
   // ── Loop single segment ───────────────────────────────────────────────────
   if (loopSegmentId !== null) {
     const loopSeg = SEGMENTS.find(s => s.id === loopSegmentId);
     if (loopSeg && adjustedTime >= loopSeg.end_time) {
+      // Count one completion per crossing (debounce: 1 per segment duration minimum)
+      const segDur = Math.max(1, loopSeg.end_time - loopSeg.start_time);
+      const now = Date.now();
+      const lastCounted = _loopPlayCount[loopSegmentId + '_ts'] || 0;
+      if (now - lastCounted > segDur * 700) { // 70% of duration in ms
+        _loopPlayCount[loopSegmentId + '_ts'] = now;
+        _incrementPracticeCount(loopSegmentId);
+      }
       player.seekTo(loopSeg.start_time + timeOffset, true);
       player.playVideo();
       return;
@@ -183,17 +226,100 @@ function scrollToSegment(el) {
 // ── A: Loop single segment ────────────────────────────────────────────────────
 
 function toggleLoopSegment(segDbId) {
-  if (loopSegmentId === segDbId) {
-    loopSegmentId = null;
-  } else {
-    loopSegmentId = segDbId;
+  // If in range selection mode, use click to define range start/end
+  if (loopRangeSelecting) {
+    const idx = SEGMENTS.findIndex(s => s.id === segDbId);
+    if (idx < 0) return;
+    if (loopRangeStartIdx === null) {
+      loopRangeStartIdx = idx;
+      _updateRangeUI();
+    } else {
+      const a = Math.min(loopRangeStartIdx, idx);
+      const b = Math.max(loopRangeStartIdx, idx);
+      if (a === b) { clearRangeLoop(); return; }
+      loopRangeStartIdx = a;
+      loopRangeEndIdx = b;
+      loopRangeSelecting = false;
+      loopRangeActive = true;
+      loopSegmentId = null;
+      _updateRangeUI();
+    }
+    return;
   }
-  // Update all loop-seg buttons
+  // If range loop is active, any 🔂 click clears it
+  if (loopRangeActive) {
+    clearRangeLoop();
+    return;
+  }
+  // Normal single-segment loop
+  loopSegmentId = (loopSegmentId === segDbId) ? null : segDbId;
+  _updateSingleLoopUI();
+}
+
+function _updateSingleLoopUI() {
   document.querySelectorAll('.seg-loop-btn').forEach(btn => {
     const id = parseInt(btn.dataset.segId);
     btn.classList.toggle('active-loop', id === loopSegmentId);
     btn.title = (id === loopSegmentId) ? 'Đang lặp segment này – Click để tắt' : 'Lặp segment này';
     btn.textContent = (id === loopSegmentId) ? '🔂 ON' : '🔂';
+  });
+}
+
+// ── B2: Range loop (multi-segment) ───────────────────────────────────────────
+
+function toggleRangeLoopMode() {
+  if (loopRangeActive || loopRangeSelecting) {
+    clearRangeLoop();
+  } else {
+    loopRangeSelecting = true;
+    loopRangeStartIdx = null;
+    loopRangeEndIdx = null;
+    loopSegmentId = null;
+    _updateSingleLoopUI();
+    _updateRangeUI();
+  }
+}
+
+function clearRangeLoop() {
+  loopRangeActive = false;
+  loopRangeSelecting = false;
+  loopRangeStartIdx = null;
+  loopRangeEndIdx = null;
+  _updateRangeUI();
+}
+
+function _updateRangeUI() {
+  const btn = document.getElementById('range-loop-btn');
+  if (!btn) return;
+  if (loopRangeActive) {
+    btn.textContent = `🔂 ${loopRangeStartIdx + 1}–${loopRangeEndIdx + 1} ✕`;
+    btn.className = 'text-xs bg-purple-800 hover:bg-purple-700 border border-purple-600 text-purple-200 px-2 py-1.5 rounded-lg transition';
+  } else if (loopRangeSelecting) {
+    btn.textContent = loopRangeStartIdx === null ? '🔂 Chọn đầu…' : '🔂 Chọn cuối…';
+    btn.className = 'text-xs bg-yellow-800 hover:bg-yellow-700 border border-yellow-600 text-yellow-200 px-2 py-1.5 rounded-lg transition';
+  } else {
+    btn.textContent = '🔂 Range';
+    btn.className = 'text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-2 py-1.5 rounded-lg transition';
+  }
+  document.querySelectorAll('.seg-loop-btn').forEach(loopBtn => {
+    const segId = parseInt(loopBtn.dataset.segId);
+    const idx = SEGMENTS.findIndex(s => s.id === segId);
+    if (loopRangeActive && idx >= loopRangeStartIdx && idx <= loopRangeEndIdx) {
+      loopBtn.classList.add('active-loop');
+      if (idx === loopRangeStartIdx) { loopBtn.textContent = '🔂 S'; loopBtn.title = 'Điểm đầu range – click để xóa'; }
+      else if (idx === loopRangeEndIdx) { loopBtn.textContent = '🔂 E'; loopBtn.title = 'Điểm cuối range – click để xóa'; }
+      else { loopBtn.textContent = '🔂'; loopBtn.title = 'Trong range – click để xóa'; }
+    } else if (loopRangeSelecting && idx === loopRangeStartIdx) {
+      loopBtn.classList.add('active-loop');
+      loopBtn.textContent = '🔂 S';
+      loopBtn.title = 'Điểm đầu đã chọn – click đoạn khác để set điểm cuối';
+    } else {
+      loopBtn.classList.remove('active-loop');
+      loopBtn.textContent = '🔂';
+      loopBtn.title = loopRangeSelecting
+        ? (loopRangeStartIdx === null ? 'Click để set làm điểm đầu range' : 'Click để set làm điểm cuối range')
+        : 'Lặp segment này';
+    }
   });
 }
 
@@ -1132,5 +1258,129 @@ function compareDictation(userText, originalText) {
 
   return { accuracy, diffHtml };
 }
+
+// ── Practice count ────────────────────────────────────────────────────────────
+
+async function _incrementPracticeCount(segDbId) {
+  try {
+    const res = await fetch(`/api/segment/${segDbId}/practice`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      const idx = SEGMENTS.findIndex(s => s.id === segDbId);
+      if (idx >= 0) SEGMENTS[idx].practice_count = data.practice_count;
+      const badge = document.querySelector(`.seg-practice-badge[data-seg-id="${segDbId}"]`);
+      if (badge) {
+        const pc = data.practice_count;
+        badge.dataset.count = pc;
+        badge.title = `Đã luyện ${pc} lần`;
+        if (pc >= 20)      badge.textContent = '🌺🌿🌿';
+        else if (pc >= 15) badge.textContent = '🌸🌿🌿';
+        else if (pc >= 10) badge.textContent = '🌿🌿';
+        else if (pc >= 5)  badge.textContent = '🌿';
+        else               badge.textContent = '';
+      }
+    }
+  } catch (_) {}
+}
+
+// ── Daily goal ────────────────────────────────────────────────────────────────
+
+async function _logPracticeSession(seconds) {
+  if (seconds < 5) return;
+  try {
+    const res = await fetch('/api/daily_goal/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seconds })
+    });
+    const data = await res.json();
+    if (data.success) {
+      _goalTodaySeconds = data.today_seconds;
+      _updateGoalDisplay();
+    }
+  } catch (_) {}
+}
+
+function _updateGoalDisplay() {
+  const goalSecs = _goalMinutes * 60;
+  const pct = goalSecs > 0 ? Math.min(100, Math.round((_goalTodaySeconds / goalSecs) * 100)) : 0;
+  const todayMin = Math.floor(_goalTodaySeconds / 60);
+  const todaySec = _goalTodaySeconds % 60;
+
+  const bar = document.getElementById('goal-progress-bar');
+  if (bar) {
+    bar.style.width = pct + '%';
+    bar.style.background = pct >= 100 ? '#22c55e' : '';
+  }
+  const label = document.getElementById('goal-label');
+  if (label) label.textContent = `${todayMin}/${_goalMinutes}p`;
+
+  const panelBar = document.getElementById('goal-progress-bar-panel');
+  if (panelBar) {
+    panelBar.style.width = pct + '%';
+    panelBar.style.background = pct >= 100 ? '#22c55e' : '';
+  }
+  const todayDisplay = document.getElementById('goal-today-display');
+  if (todayDisplay) todayDisplay.textContent = `${todayMin}:${String(todaySec).padStart(2, '0')}`;
+  const targetDisplay = document.getElementById('goal-target-display');
+  if (targetDisplay) targetDisplay.textContent = _goalMinutes;
+  const statusText = document.getElementById('goal-status-text');
+  if (statusText) {
+    statusText.textContent = pct >= 100
+      ? '🎉 Đã hoàn thành mục tiêu hôm nay!'
+      : `Còn ${_goalMinutes - todayMin} phút nữa để đạt mục tiêu`;
+  }
+}
+
+function toggleGoalPanel() {
+  const panel = document.getElementById('goal-panel');
+  if (panel) panel.classList.toggle('hidden');
+}
+
+async function saveGoal() {
+  const input = document.getElementById('goal-input');
+  const minutes = parseInt(input ? input.value : '');
+  if (!minutes || minutes < 1 || minutes > 480) { alert('Nhập từ 1–480 phút'); return; }
+  try {
+    const res = await fetch('/api/daily_goal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes })
+    });
+    const data = await res.json();
+    if (data.success) {
+      _goalMinutes = data.goal_minutes;
+      _updateGoalDisplay();
+      const panel = document.getElementById('goal-panel');
+      if (panel) panel.classList.add('hidden');
+    }
+  } catch (_) {}
+}
+
+async function initGoal() {
+  try {
+    const res = await fetch('/api/daily_goal');
+    const data = await res.json();
+    if (!data.error) {
+      _goalMinutes = data.goal_minutes;
+      _goalTodaySeconds = data.today_seconds;
+      _updateGoalDisplay();
+      const input = document.getElementById('goal-input');
+      if (input) input.placeholder = _goalMinutes;
+    }
+  } catch (_) {}
+}
+
+window.addEventListener('beforeunload', () => {
+  if (_sessionActive && _sessionStartTime) {
+    const elapsed = Math.round((Date.now() - _sessionStartTime) / 1000);
+    if (elapsed >= 5) {
+      navigator.sendBeacon('/api/daily_goal/log',
+        new Blob([JSON.stringify({ seconds: elapsed })], { type: 'application/json' }));
+    }
+  }
+});
+
+initGoal();
 
 
