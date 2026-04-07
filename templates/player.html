@@ -37,7 +37,7 @@
 <div class="flex flex-col h-screen">
 
   <!-- Top bar -->
-  <div class="bg-gray-900 border-b border-gray-800 px-3 md:px-4 py-2 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 flex-shrink-0 relative">
+  <div class="bg-gray-900 border-b border-gray-800 px-3 md:px-4 py-2 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 flex-shrink-0 relative z-40">
     
     <!-- Row 1 (Mobile) / Left side (Desktop): Back, Title, Language badge -->
     <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -52,6 +52,11 @@
       {% else %}
         <span class="text-[10px] md:text-xs bg-blue-900 text-blue-300 border border-blue-700 px-1.5 md:px-2 py-0.5 rounded-full flex-shrink-0">🇬🇧<span class="hidden md:inline"> English</span></span>
       {% endif %}
+      
+      <!-- Hamburger Icon for Mobile Player -->
+      <button class="lg:hidden ml-auto text-gray-300 hover:text-white p-1 focus:outline-none" onclick="document.getElementById('player-mobile-menu').classList.toggle('hidden')">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      </button>
     </div>
 
     <!-- Row 2 (Mobile) / Right side (Desktop): Buttons & Goal -->
@@ -73,6 +78,15 @@
         </div>
         <span id="goal-label" class="text-[10px] md:text-xs text-gray-400">0/15p</span>
       </div>
+    </div>
+
+    <!-- Mobile Menu Dropdown -->
+    <div id="player-mobile-menu" class="hidden absolute top-full left-0 right-0 bg-gray-900 border-b border-gray-800 flex flex-col p-4 gap-3 lg:hidden shadow-2xl z-50">
+      <a href="{{ url_for('weekly_review') }}" class="text-emerald-400 hover:text-emerald-300 text-sm font-semibold inline-block">📈 Review</a>
+      <a href="{{ url_for('learning_path') }}" class="text-purple-400 hover:text-purple-300 text-sm font-semibold inline-block">🗺 Lộ trình</a>
+      <a href="{{ url_for('learning_sources') }}" class="text-cyan-400 hover:text-cyan-300 text-sm font-semibold inline-block">📚 Nguồn học</a>
+      <a href="{{ url_for('bookmarks_all') }}" class="text-yellow-400 hover:text-yellow-300 text-sm font-semibold inline-block">★ Bookmarks Tất cả</a>
+      <a href="{{ url_for('add_video_form') }}" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition text-center mt-2">＋ Thêm video</a>
     </div>
 
     <!-- Goal settings panel (hidden) -->
