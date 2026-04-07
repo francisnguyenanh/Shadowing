@@ -1,0 +1,2 @@
+1.khi đang trong 1 trunk, quay lại thì có thể quay lại chunk đó để thực hiện tiếp các step khác
+2.ở lyric, khi bôi đen đoạn muốn đăng ký thành expression thì bôi đen rồi click btn expression thì sẽ lưu đoạn đó vào expression của chunk đó
