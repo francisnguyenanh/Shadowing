@@ -37,26 +37,42 @@
 <div class="flex flex-col h-screen">
 
   <!-- Top bar -->
-  <div class="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center gap-3 flex-shrink-0 relative">
-    <a href="{{ url_for('index') }}" class="text-gray-400 hover:text-gray-200 transition text-sm">← Quay lại</a>
-    <span class="text-gray-700">|</span>
-    <h1 class="text-sm font-semibold text-gray-200 truncate flex-1">{{ video.title or video.youtube_url }}</h1>
-    <a href="{{ url_for('cycle_dashboard', video_db_id=video.id) }}"
-       class="text-purple-400 hover:text-purple-300 text-xs px-2 py-1 rounded transition border border-transparent hover:border-purple-700 flex-shrink-0"
-       title="Chu kỳ 3 ngày">🔄 Chu kỳ</a>
-    <a href="{{ url_for('bookmarks_video', video_db_id=video.id) }}"
-       class="text-yellow-400 hover:text-yellow-300 text-xs px-2 py-1 rounded transition border border-transparent hover:border-yellow-700 flex-shrink-0"
-       title="Xem bookmarks video này">★ Bookmarks</a>
+  <div class="bg-gray-900 border-b border-gray-800 px-3 md:px-4 py-2 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 flex-shrink-0 relative">
+    
+    <!-- Row 1 (Mobile) / Left side (Desktop): Back, Title, Language badge -->
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+      <a href="{{ url_for('index') }}" class="text-gray-400 hover:text-gray-200 transition text-[13px] whitespace-nowrap flex-shrink-0">
+        <span class="md:hidden">← Trang chủ</span>
+        <span class="hidden md:inline">← Quay lại</span>
+      </a>
+      <span class="text-gray-700 hidden md:inline">|</span>
+      <h1 class="text-[13px] md:text-sm font-semibold text-gray-200 truncate flex-1">{{ video.title or video.youtube_url }}</h1>
+      {% if video.language == 'ja' %}
+        <span class="text-[10px] md:text-xs bg-red-900 text-red-300 border border-red-700 px-1.5 md:px-2 py-0.5 rounded-full flex-shrink-0">🇯🇵<span class="hidden md:inline"> 日本語</span></span>
+      {% else %}
+        <span class="text-[10px] md:text-xs bg-blue-900 text-blue-300 border border-blue-700 px-1.5 md:px-2 py-0.5 rounded-full flex-shrink-0">🇬🇧<span class="hidden md:inline"> English</span></span>
+      {% endif %}
+    </div>
 
-    <!-- Daily Goal Widget -->
-    <div id="daily-goal-widget"
-         class="flex items-center gap-1.5 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 flex-shrink-0 cursor-pointer hover:border-indigo-500 transition"
-         onclick="toggleGoalPanel()" title="Mục tiêu luyện hàng ngày">
-      <span class="text-xs text-gray-400">🎯</span>
-      <div class="w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-        <div id="goal-progress-bar" class="h-full bg-indigo-500 rounded-full transition-all" style="width:0%"></div>
+    <!-- Row 2 (Mobile) / Right side (Desktop): Buttons & Goal -->
+    <div class="flex items-center gap-2 overflow-x-auto scrollbar-hide flex-shrink-0 pb-1 md:pb-0">
+      <a href="{{ url_for('cycle_dashboard', video_db_id=video.id) }}"
+         class="text-purple-400 hover:text-purple-300 text-[11px] md:text-xs px-2 py-1 rounded transition border border-gray-800 hover:border-purple-700 flex-shrink-0 whitespace-nowrap"
+         title="Chu kỳ 3 ngày">🔄 Chu kỳ</a>
+      <a href="{{ url_for('bookmarks_video', video_db_id=video.id) }}"
+         class="text-yellow-400 hover:text-yellow-300 text-[11px] md:text-xs px-2 py-1 rounded transition border border-gray-800 hover:border-yellow-700 flex-shrink-0 whitespace-nowrap"
+         title="Xem bookmarks video này">★ Bookmarks</a>
+
+      <!-- Daily Goal Widget -->
+      <div id="daily-goal-widget"
+           class="flex items-center gap-1.5 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 flex-shrink-0 cursor-pointer hover:border-indigo-500 transition whitespace-nowrap"
+           onclick="toggleGoalPanel()" title="Mục tiêu luyện hàng ngày">
+        <span class="text-[10px] md:text-xs text-gray-400">🎯</span>
+        <div class="w-12 md:w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+          <div id="goal-progress-bar" class="h-full bg-indigo-500 rounded-full transition-all" style="width:0%"></div>
+        </div>
+        <span id="goal-label" class="text-[10px] md:text-xs text-gray-400">0/15p</span>
       </div>
-      <span id="goal-label" class="text-xs text-gray-400 whitespace-nowrap">0/15p</span>
     </div>
 
     <!-- Goal settings panel (hidden) -->
@@ -100,11 +116,6 @@
         </div>
       </div>
     </div>
-    {% if video.language == 'ja' %}
-      <span class="text-xs bg-red-900 text-red-300 border border-red-700 px-2 py-0.5 rounded-full flex-shrink-0">🇯🇵 日本語</span>
-    {% else %}
-      <span class="text-xs bg-blue-900 text-blue-300 border border-blue-700 px-2 py-0.5 rounded-full flex-shrink-0">🇬🇧 English</span>
-    {% endif %}
   </div>
 
   <!-- Main layout (resizable) -->
