@@ -1,6 +1,52 @@
 {% extends 'base.html' %}
 {% block title %}Nguồn học theo trình độ — Tomo Shadow App{% endblock %}
 
+{# ── Row macro – must be defined BEFORE first call ── #}
+{% macro _source_row(src) %}
+<tr class="border-b border-gray-800 last:border-0 hover:bg-gray-800/50 transition" id="src-row-{{ src.id }}">
+  <td class="px-4 py-3">
+    <div class="font-semibold text-gray-100">{{ src.channel_name }}</div>
+    {% if src.reason %}
+    <details class="mt-1">
+      <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300 select-none">💡 Lý do dùng shadowing</summary>
+      <p class="text-xs text-gray-400 mt-1 leading-relaxed">{{ src.reason }}</p>
+    </details>
+    {% endif %}
+  </td>
+  <td class="px-4 py-3 hidden sm:table-cell">
+    {% if src.link %}
+    <a href="{{ 'https://' + src.link if not src.link.startswith('http') else src.link }}"
+       target="_blank" rel="noopener noreferrer"
+       class="text-indigo-400 hover:text-indigo-300 text-xs break-all transition">
+      {{ src.link }}
+    </a>
+    {% else %}
+    <span class="text-gray-600 text-xs">—</span>
+    {% endif %}
+  </td>
+  <td class="px-4 py-3 hidden md:table-cell">
+    <span class="text-xs text-gray-300">{{ src.topic or '—' }}</span>
+  </td>
+  <td class="px-4 py-3 hidden lg:table-cell">
+    {% if src.level %}
+    <span class="text-xs bg-gray-800 border border-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{{ src.level }}</span>
+    {% else %}
+    <span class="text-gray-600 text-xs">—</span>
+    {% endif %}
+  </td>
+  <td class="px-4 py-3 text-right">
+    <div class="flex gap-1 justify-end">
+      <button onclick='openEditModal({{ src | tojson }})'
+              class="text-xs text-gray-400 hover:text-indigo-300 px-2 py-1 rounded transition border border-transparent hover:border-gray-600"
+              title="Sửa">✏️</button>
+      <button onclick="deleteSource({{ src.id }}, '{{ src.channel_name | e }}')"
+              class="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded transition border border-transparent hover:border-gray-600"
+              title="Xóa">✕</button>
+    </div>
+  </td>
+</tr>
+{% endmacro %}
+
 {% block content %}
 <div class="max-w-5xl mx-auto">
 
@@ -77,52 +123,6 @@
   </div>
 
 </div>
-
-<!-- ── Macro: source table row ───────────────────────────────────────────── -->
-{% macro _source_row(src) %}
-<tr class="border-b border-gray-800 last:border-0 hover:bg-gray-800/50 transition" id="src-row-{{ src.id }}">
-  <td class="px-4 py-3">
-    <div class="font-semibold text-gray-100">{{ src.channel_name }}</div>
-    {% if src.reason %}
-    <details class="mt-1">
-      <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300 select-none">💡 Lý do dùng shadowing</summary>
-      <p class="text-xs text-gray-400 mt-1 leading-relaxed">{{ src.reason }}</p>
-    </details>
-    {% endif %}
-  </td>
-  <td class="px-4 py-3 hidden sm:table-cell">
-    {% if src.link %}
-    <a href="{{ 'https://' + src.link if not src.link.startswith('http') else src.link }}"
-       target="_blank" rel="noopener noreferrer"
-       class="text-indigo-400 hover:text-indigo-300 text-xs break-all transition">
-      {{ src.link }}
-    </a>
-    {% else %}
-    <span class="text-gray-600 text-xs">—</span>
-    {% endif %}
-  </td>
-  <td class="px-4 py-3 hidden md:table-cell">
-    <span class="text-xs text-gray-300">{{ src.topic or '—' }}</span>
-  </td>
-  <td class="px-4 py-3 hidden lg:table-cell">
-    {% if src.level %}
-    <span class="text-xs bg-gray-800 border border-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{{ src.level }}</span>
-    {% else %}
-    <span class="text-gray-600 text-xs">—</span>
-    {% endif %}
-  </td>
-  <td class="px-4 py-3 text-right">
-    <div class="flex gap-1 justify-end">
-      <button onclick="openEditModal({{ src | tojson | e }})"
-              class="text-xs text-gray-400 hover:text-indigo-300 px-2 py-1 rounded transition border border-transparent hover:border-gray-600"
-              title="Sửa">✏️</button>
-      <button onclick="deleteSource({{ src.id }}, '{{ src.channel_name | e }}')"
-              class="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded transition border border-transparent hover:border-gray-600"
-              title="Xóa">✕</button>
-    </div>
-  </td>
-</tr>
-{% endmacro %}
 
 <!-- ── Add / Edit Modal ─────────────────────────────────────────────────── -->
 <div id="src-modal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
